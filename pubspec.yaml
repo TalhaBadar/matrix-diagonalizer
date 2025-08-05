@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   ml_linalg: ^13.12.6
   http: ^1.4.0
+  connectivity_plus: ^6.1.4
 
 
 

@@ -24,17 +24,20 @@ def check_diagonalizable():
             nullity = matrix.shape[0] - np.linalg.matrix_rank(A_minus_lambdaI)
             total_independent_vectors += nullity
 
-        is_diag = total_independent_vectors == matrix.shape[0]
+        is_diag = (total_independent_vectors == matrix.shape[0])
 
-        return jsonify({
-            'is_diagonalizable': is_diag,
+        # Explicit casts to python native types for jsonify
+        response = {
+            'is_diagonalizable': bool(is_diag),
             'eigenvalues': eigenvalues.tolist(),
-            'total_independent_vectors': total_independent_vectors
-        })
+            'total_independent_vectors': int(total_independent_vectors)
+        }
+
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
