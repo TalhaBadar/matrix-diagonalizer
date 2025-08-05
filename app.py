@@ -1,8 +1,14 @@
 from flask import Flask, request, jsonify
 import numpy as np
+import os 
 from numpy.linalg import eig, matrix_rank
-
+ 
 app = Flask(__name__)
+
+
+@app.route('/')
+def home():
+    return 'Diagonalizer API is running!'
 
 @app.route('/check_diagonalizable', methods=['POST'])
 def check_diagonalizable():
@@ -33,4 +39,5 @@ def check_diagonalizable():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # <-- Use dynamic port
+    app.run(debug=False, host='0.0.0.0', port=port)
