@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import numpy as np
 import os
+from sympy import Matrix
 
 app = Flask(__name__)
 
@@ -35,6 +36,26 @@ def check_diagonalizable():
 
         return jsonify(response)
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
+@app.route('/jordan_form', methods=['POST'])
+def jordan_form():
+    try:
+        data = request.get_json()
+        matrix = Matrix(data['matrix'])
+
+        jordan, P = matrix.jordan_form(calc_transform=True)
+        P_inv = P.inv()
+        A_reconstructed = P * jordan * P_inv
+
+        return jsonify({
+            'jordan': [[float(val.evalf()) for val in row] for row in jordan.tolist()],
+            'P': [[float(val.evalf()) for val in row] for row in P.tolist()],
+            'A_reconstructed': [[float(val.evalf()) for val in row] for row in A_reconstructed.tolist()]
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
