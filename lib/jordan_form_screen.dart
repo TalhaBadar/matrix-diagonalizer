@@ -1,21 +1,23 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'dart:io'; // for InternetAddress.lookup
-
 import 'package:http/http.dart' as http;
 
-class DiagonalizabilityChecker extends StatefulWidget {
+class JordanFormScreen extends StatefulWidget {
   @override
-  _DiagonalizabilityCheckerState createState() =>
-      _DiagonalizabilityCheckerState();
+  _JordanFormScreenState createState() => _JordanFormScreenState();
 }
 
-class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
+class _JordanFormScreenState extends State<JordanFormScreen> {
   int size = 2;
   late List<List<TextEditingController>> controllers;
   String result = '';
   bool isLoading = false;
+  List<List<double>>? _jordanMatrix;
+  List<List<double>>? _pMatrix;
+  List<List<double>>? _aMatrix;
 
   @override
   void initState() {
@@ -48,33 +50,29 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
     );
   }
 
-  Future<void> _checkDiagonalizability() async {
+  Future<void> _getJordanForm() async {
     setState(() {
       isLoading = true;
       result = '';
     });
-    // ✅ Check internet connection first
+
+    // 🔌 Internet check
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult == ConnectivityResult.none) {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
       _showNoInternetDialog();
       return;
     }
+
     try {
-      final result = await InternetAddress.lookup('example.com');
-      if (result.isEmpty || result[0].rawAddress.isEmpty) {
-        setState(() {
-          isLoading = false;
-        });
+      final lookup = await InternetAddress.lookup('example.com');
+      if (lookup.isEmpty || lookup[0].rawAddress.isEmpty) {
+        setState(() => isLoading = false);
         _showNoInternetDialog();
         return;
       }
-    } on SocketException catch (_) {
-      setState(() {
-        isLoading = false;
-      });
+    } on SocketException {
+      setState(() => isLoading = false);
       _showNoInternetDialog();
       return;
     }
@@ -84,7 +82,7 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
     try {
       final response = await http.post(
         Uri.parse(
-          'https://diagonalizer-api-production-0743.up.railway.app/check_diagonalizable',
+          'https://diagonalizer-api-production-0743.up.railway.app/jordan_form',
         ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'matrix': matrix}),
@@ -92,23 +90,25 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final isDiag = data['is_diagonalizable'];
-        final eigenvalues = (data['eigenvalues'] as List)
-            .map((e) => (e as num).toDouble().toStringAsFixed(4))
+        final jordan = (data['jordan'] as List)
+            .map<List<double>>((row) => List<double>.from(row))
             .toList();
-        final independent = data['total_independent_vectors'];
+        final p = (data['P'] as List)
+            .map<List<double>>((row) => List<double>.from(row))
+            .toList();
+        final aReconstructed = (data['A_reconstructed'] as List)
+            .map<List<double>>((row) => List<double>.from(row))
+            .toList();
 
         setState(() {
-          result =
-              (isDiag
-                  ? '✅ Matrix IS diagonalizable'
-                  : '❌ Matrix is NOT diagonalizable') +
-              '\n\nEigenvalues: ${eigenvalues.join(', ')}\n' +
-              'Independent eigenvectors: $independent / $size';
+          result = ''; // We'll use widgets instead
+          _jordanMatrix = jordan;
+          _pMatrix = p;
+          _aMatrix = aReconstructed;
         });
       } else {
         setState(() {
-          result = '⚠️ Server error: ${response.body}';
+          result = '❌ Server Error: ${response.body}';
         });
       }
     } catch (e) {
@@ -116,47 +116,32 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
         result = '⚠️ Error: $e';
       });
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
   void _showNoInternetDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text(
           'No Internet',
-          style: TextStyle(
-            fontSize: 17,
-            color: Colors.black,
-            fontFamily: 'Urbanist',
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'Please connect to WiFi or mobile data and try again',
-          style: TextStyle(fontFamily: 'Urbanist'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'OK',
-              style: TextStyle(
-                fontSize: 17,
-                color: Colors.black,
-                fontFamily: 'Urbanist',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text('OK'),
           ),
         ],
       ),
     );
-    return;
   }
+
+  final List<String> subscriptMap = ['₁', '₂', '₃', '₄', '₅', '₆'];
 
   @override
   void dispose() {
@@ -168,16 +153,12 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
     super.dispose();
   }
 
-  final List<String> subscriptMap = ['₁', '₂', '₃', '₄', '₅', '₆'];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
         title: const Text(
-          'Diagonalizability Checker',
+          'Jordan Canonical Form',
           style: TextStyle(
             fontSize: 24,
             color: Colors.white,
@@ -185,6 +166,8 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
@@ -203,7 +186,7 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
                 ),
                 DropdownButton<int>(
                   value: size,
-                  items: List.generate(5, (i) => i + 2)
+                  items: List.generate(4, (i) => i + 2)
                       .map(
                         (e) =>
                             DropdownMenuItem(value: e, child: Text('$e × $e')),
@@ -244,14 +227,14 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: isLoading ? null : _checkDiagonalizability,
+              onPressed: isLoading ? null : _getJordanForm,
               child: const Text(
-                'Check Diagonalizability',
+                'Compute Jordan Form',
                 style: TextStyle(
                   fontSize: 17,
-                  color: Colors.black,
-                  fontFamily: 'Urbanist',
                   fontWeight: FontWeight.bold,
+                  fontFamily: 'Urbanist',
+                  color: Colors.black,
                 ),
               ),
             ),
@@ -260,11 +243,67 @@ class _DiagonalizabilityCheckerState extends State<DiagonalizabilityChecker> {
               const Center(
                 child: CircularProgressIndicator(color: Colors.black),
               )
-            else
-              SelectableText(result, style: const TextStyle(fontSize: 16)),
+            else ...[
+              if (_jordanMatrix != null)
+                buildMatrix(
+                  _jordanMatrix!,
+                  title: '📌 Jordan Canonical Form (J)',
+                ),
+              const SizedBox(height: 20),
+              if (_pMatrix != null)
+                buildMatrix(_pMatrix!, title: '🔁 Transformation Matrix (P)'),
+              const SizedBox(height: 20),
+              if (_aMatrix != null)
+                buildMatrix(
+                  _aMatrix!,
+                  title: '🧠 Reconstructed Matrix A = P × J × P⁻¹',
+                ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+Widget buildMatrix(List<List<double>> matrix, {String? title}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (title != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              fontFamily: 'Urbanist',
+            ),
+          ),
+        ),
+      Table(
+        border: TableBorder.all(color: Colors.grey),
+        defaultColumnWidth: const IntrinsicColumnWidth(),
+        children: matrix
+            .map(
+              (row) => TableRow(
+                children: row
+                    .map(
+                      (val) => Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          val.toStringAsFixed(3),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
 }
